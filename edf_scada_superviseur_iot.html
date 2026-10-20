@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-[#F8F9FB]">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDF - Superviseur SCADA & Réseaux IoT National</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        edf: {
+                            blue: '#002060',
+                            orange: '#FF5F00',
+                            violet: '#22223B',
+                            violetMid: '#3D3B5C',
+                            violetSoft: '#4A4E69',
+                            violetSlate: '#7A7289',
+                            violetLight: '#F0EFF5',
+                            accent: '#6C5CE7',
+                            bg: '#F8F9FB',
+                            panel: '#FFFFFF',
+                            border: '#E2E4EB'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom SCADA Control Room Aesthetics */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #F8F9FB; }
+        ::-webkit-scrollbar-thumb { background: #3D3B5C; border-radius: 4px; }
+
+        .scada-panel {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E4EB;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(34, 34, 59, 0.04);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .scada-panel:hover {
+            border-color: #7A7289;
+            box-shadow: 0 4px 18px rgba(34, 34, 59, 0.08);
+        }
+
+        .pulse-emerald {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+            animation: pulseEmerald 2s infinite;
+        }
+        @keyframes pulseEmerald {
+            70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .pulse-rose {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulseRose 1.5s infinite;
+        }
+        @keyframes pulseRose {
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .mimic-line {
+            stroke-dasharray: 6;
+            animation: dash 20s linear infinite;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -100; }
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans flex flex-col antialiased bg-[#F8F9FB] selection:bg-edf-accent selection:text-white">
+
+    <!-- 1. HEADER & NATIONAL CONTROL ROOM STATUS BAR -->
+    <header class="bg-[#22223B] text-white border-b border-[#3D3B5C] sticky top-0 z-50 shadow-md">
+        <div class="max-w-[1750px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- EDF Brand Logo & System Title -->
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#002060] via-edf-orange to-amber-400 p-0.5 flex items-center justify-center shadow-lg">
+                        <div class="w-full h-full bg-[#22223B] rounded-[10px] flex items-center justify-center">
+                            <i data-lucide="zap" class="w-5 h-5 text-edf-orange fill-edf-orange"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-black text-white text-base tracking-wider">EDF</span>
+                            <span class="text-[10px] bg-edf-orange/20 text-edf-orange border border-edf-orange/40 font-bold px-2 py-0.5 rounded uppercase">Superviseur SCADA & IIoT</span>
+                        </div>
+                        <div class="text-[11px] text-slate-300 font-medium">Centre National de Conduite du Réseau Électrique</div>
+                    </div>
+                </div>
+
+                <div class="hidden xl:block h-8 w-px bg-edf-violetMid"></div>
+
+                <!-- Regional Sub-station Selector -->
+                <div class="hidden sm:flex items-center gap-2">
+                    <i data-lucide="map-pin" class="w-4 h-4 text-edf-violetSlate"></i>
+                    <select id="site-selector" onchange="changeSite(this.value)" class="bg-[#3D3B5C] border border-[#5C5470] text-xs text-white font-medium rounded-lg px-3 py-1.5 focus:outline-none focus:border-edf-accent">
+                        <option value="gravelines">Centrale Nucléaire de Gravelines (Tranche 1-6)</option>
+                        <option value="grandmaison">Barrage Hydroélectrique de Grand'Maison</option>
+                        <option value="fecamp">Parc Éolien En-Mer Offshore Fécamp</option>
+                        <option value="saclay">Poste Source Smart Grid HTB Saclay (400kV)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Key National Telemetry Metrics (Grid Frequency, GW Output, Scrape Status) -->
+            <div class="flex flex-wrap items-center gap-3 text-xs font-mono">
+                
+                <!-- Grid Frequency Badge (Crucial EDF Indicator) -->
+                <div class="flex items-center gap-2 bg-[#3D3B5C] border border-[#5C5470] px-3 py-1.5 rounded-lg">
+                    <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="text-slate-300 font-sans">Fréquence Réseau:</span>
+                    <strong class="text-emerald-400 font-extrabold text-sm" id="header-grid-freq">50.01 Hz</strong>
+                </div>
+
+                <!-- Total Power Output GW -->
+                <div class="hidden md:flex items-center gap-2 bg-[#3D3B5C] border border-[#5C5470] px-3 py-1.5 rounded-lg">
+                    <i data-lucide="gauge" class="w-4 h-4 text-edf-orange"></i>
+                    <span class="text-slate-300 font-sans">Prod. Nationale:</span>
+                    <strong class="text-white font-extrabold text-sm" id="header-total-power">44.82 GW</strong>
+                </div>
+
+                <!-- IoT Gateway Health -->
+                <div class="hidden lg:flex items-center gap-2 bg-[#3D3B5C] border border-[#5C5470] px-3 py-1.5 rounded-lg">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 pulse-emerald"></span>
+                    <span class="text-slate-300 font-sans">Passerelles IoT:</span>
+                    <span class="text-emerald-400 font-bold">1 420 / 1 422 En Ligne</span>
+                </div>
+
+                <!-- UTC / CET Clock -->
+                <div class="bg-[#3D3B5C] border border-[#5C5470] px-3 py-1.5 rounded-lg text-slate-200 font-bold flex items-center gap-1.5">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-300"></i>
+                    <span id="scada-clock">15:30:00 CET</span>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- 2. NAVIGATION BAR & SIMULATION PERTURBATION CONTROLS -->
+    <section class="bg-white border-b border-edf-border shadow-sm">
+        <div class="max-w-[1750px] mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- View Selector Tabs -->
+            <nav class="flex items-center gap-1 sm:gap-2">
+                <button onclick="switchView('synoptique')" id="btn-synoptique" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-edf-violet text-white flex items-center gap-2 shadow-sm">
+                    <i data-lucide="git-merge" class="w-4 h-4"></i>
+                    <span>Synoptique Réseau SCADA</span>
+                </button>
+                <button onclick="switchView('telemetry')" id="btn-telemetry" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-edf-violetSoft hover:text-edf-violet hover:bg-edf-violetLight flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                    <span>Tableaux de Bord Télémesure</span>
+                </button>
+                <button onclick="switchView('iot')" id="btn-iot" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-edf-violetSoft hover:text-edf-violet hover:bg-edf-violetLight flex items-center gap-2">
+                    <i data-lucide="radio" class="w-4 h-4"></i>
+                    <span>Flotte Capteurs IIoT (LoRaWAN/5G)</span>
+                </button>
+                <button onclick="switchView('alarms')" id="btn-alarms" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-edf-violetSoft hover:text-edf-violet hover:bg-edf-violetLight flex items-center gap-2 relative">
+                    <i data-lucide="bell" class="w-4 h-4"></i>
+                    <span>Journal des Alarmes & Conduite</span>
+                    <span id="alarm-tab-badge" class="bg-rose-500 text-white font-mono font-bold text-[10px] px-1.5 py-0.2 rounded-full">1</span>
+                </button>
+            </nav>
+
+            <!-- Interactive Perturbation / Load Injection Controls -->
+            <div class="flex items-center gap-3 bg-edf-violetLight px-3.5 py-1.5 rounded-xl border border-edf-border text-xs">
+                <span class="font-bold text-edf-violet flex items-center gap-1.5">
+                    <i data-lucide="sliders" class="w-4 h-4 text-edf-accent"></i>
+                    <span>Injecteur de Perturbation SCADA:</span>
+                </span>
+                
+                <button onclick="injectPerturbation('overload')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2.5 py-1 rounded-lg transition-colors text-[11px] flex items-center gap-1">
+                    <i data-lucide="trending-up" class="w-3 h-3"></i>
+                    <span>Pointe de Charge +30%</span>
+                </button>
+
+                <button onclick="injectPerturbation('heat')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-2.5 py-1 rounded-lg transition-colors text-[11px] flex items-center gap-1">
+                    <i data-lucide="thermometer" class="w-3 h-3"></i>
+                    <span>Surchauffe Transfo 400kV</span>
+                </button>
+
+                <button onclick="resetSimulation()" class="bg-edf-violetMid hover:bg-edf-violet text-white font-bold px-2.5 py-1 rounded-lg transition-colors text-[11px] flex items-center gap-1">
+                    <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                    <span>Réinitialiser</span>
+                </button>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 3. MAIN CONTENT DISPLAY (VIEWS) -->
+    <main class="max-w-[1750px] mx-auto px-4 py-5 flex-1 w-full space-y-6">
+
+        <!-- VIEW A: SYNOPTIQUE RÉSEAU (MIMIC DIAGRAM) -->
+        <div id="view-synoptique" class="space-y-6">
+            
+            <!-- Site Context Banner -->
+            <div class="scada-panel p-4 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-white via-white to-edf-violetLight">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 bg-edf-violetLight text-edf-violet rounded-xl border border-edf-border">
+                        <i data-lucide="cpu" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-extrabold text-edf-violet text-base" id="site-display-title">Centrale Nucléaire de Gravelines (Tranche 1-6)</h2>
+                        <p class="text-xs text-edf-violetSlate">Schéma unifilaire SCADA interactif - Lignes HTB 400kV / Disjoncteurs de Tête</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4 text-xs font-mono">
+                    <div class="text-right">
+                        <span class="text-edf-violetSlate block font-sans">Tension Barre 400kV</span>
+                        <strong class="text-edf-violet font-extrabold text-sm" id="site-voltage-val">400.2 kV</strong>
+                    </div>
+                    <div class="h-8 w-px bg-edf-border"></div>
+                    <div class="text-right">
+                        <span class="text-edf-violetSlate block font-sans">Courant Total Phase A</span>
+                        <strong class="text-edf-violet font-extrabold text-sm" id="site-current-val">1 240 A</strong>
+                    </div>
+                    <div class="h-8 w-px bg-edf-border"></div>
+                    <div class="text-right">
+                        <span class="text-edf-violetSlate block font-sans">Pression SF6 Disjoncteur</span>
+                        <strong class="text-emerald-600 font-extrabold text-sm" id="site-sf6-val">5.8 bar</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mimic Diagram Board (SVG Interactive Grid) -->
+            <div class="scada-panel p-6 overflow-x-auto relative">
+                <div class="min-w-[900px] flex flex-col items-center justify-center py-4">
+                    
+                    <svg viewBox="0 0 1000 380" class="w-full max-w-[1000px] font-mono text-xs">
+                        <!-- Busbar Main Top (Barre Haute Tension 400kV) -->
+                        <line x1="80" y1="50" x2="920" y2="50" stroke="#22223B" stroke-width="8" stroke-linecap="round"/>
+                        <text x="90" y="40" fill="#22223B" font-weight="bold" font-size="12">BARRE 400 kV MAIN - POSTE SOURCE HTB</text>
+                        <text x="820" y="40" fill="#10B981" font-weight="bold" font-size="12" id="busbar-status-text">EN TENSION (400.2 kV)</text>
+
+                        <!-- Feeder 1: Nuclear EPR / Generation Node -->
+                        <g transform="translate(150, 50)">
+                            <!-- Vertical Line to Breaker -->
+                            <line x1="50" y1="0" x2="50" y2="60" stroke="#FF5F00" stroke-width="4" class="mimic-line"/>
+                            
+                            <!-- Circuit Breaker DJ-01 -->
+                            <g id="dj-01-group" onclick="toggleBreaker('dj-01')" class="cursor-pointer group">
+                                <rect id="dj-01-bg" x="30" y="60" width="40" height="40" rx="6" fill="#10B981" stroke="#047857" stroke-width="2"/>
+                                <text id="dj-01-text" x="50" y="84" text-anchor="middle" fill="#FFFFFF" font-weight="bold" font-size="10">FERMÉ</text>
+                                <text x="50" y="115" text-anchor="middle" fill="#22223B" font-weight="bold" font-size="11">DJ-01 (EPR 1650MW)</text>
+                            </g>
+
+                            <line x1="50" y1="100" x2="50" y2="150" stroke="#22223B" stroke-width="4"/>
+                            
+                            <!-- Transformer Symbol T1 -->
+                            <circle cx="50" cy="170" r="18" fill="none" stroke="#22223B" stroke-width="3"/>
+                            <circle cx="50" cy="195" r="18" fill="none" stroke="#22223B" stroke-width="3"/>
+                            <text x="50" y="235" text-anchor="middle" fill="#4A4E69" font-weight="bold">TRANSFO TR-01</text>
+                            <text x="50" y="250" text-anchor="middle" fill="#7A7289" font-size="10" id="tr01-temp-txt">T: 52°C | Oil: 4.2bar</text>
+
+                            <!-- Generator Box -->
+                            <rect x="15" y="270" width="70" height="40" rx="8" fill="#22223B"/>
+                            <text x="50" y="295" text-anchor="middle" fill="#FFFFFF" font-weight="bold">GEN-01</text>
+                        </g>
+
+                        <!-- Feeder 2: Transformer 400kV / 225kV Distribution -->
+                        <g transform="translate(450, 50)">
+                            <line x1="50" y1="0" x2="50" y2="60" stroke="#6C5CE7" stroke-width="4" class="mimic-line"/>
+                            
+                            <!-- Circuit Breaker DJ-02 -->
+                            <g id="dj-02-group" onclick="toggleBreaker('dj-02')" class="cursor-pointer group">
+                                <rect id="dj-02-bg" x="30" y="60" width="40" height="40" rx="6" fill="#10B981" stroke="#047857" stroke-width="2"/>
+                                <text id="dj-02-text" x="50" y="84" text-anchor="middle" fill="#FFFFFF" font-weight="bold" font-size="10">FERMÉ</text>
+                                <text x="50" y="115" text-anchor="middle" fill="#22223B" font-weight="bold" font-size="11">DJ-02 (Ligne Saclay)</text>
+                            </g>
+
+                            <line x1="50" y1="100" x2="50" y2="150" stroke="#22223B" stroke-width="4"/>
+                            
+                            <!-- Substation Node Box -->
+                            <rect x="10" y="150" width="80" height="50" rx="8" fill="#F0EFF5" stroke="#3D3B5C" stroke-width="2"/>
+                            <text x="50" y="172" text-anchor="middle" fill="#22223B" font-weight="bold">POSTE HTB</text>
+                            <text x="50" y="188" text-anchor="middle" fill="#6C5CE7" font-size="10">225 kV Intercon.</text>
+
+                            <line x1="50" y1="200" x2="50" y2="270" stroke="#22223B" stroke-width="4"/>
+                            <!-- Load Center -->
+                            <circle cx="50" cy="290" r="20" fill="#3D3B5C"/>
+                            <text x="50" y="295" text-anchor="middle" fill="#FFFFFF" font-weight="bold">RÉSEAU</text>
+                        </g>
+
+                        <!-- Feeder 3: Offshore Wind / Interconnection Grid -->
+                        <g transform="translate(750, 50)">
+                            <line x1="50" y1="0" x2="50" y2="60" stroke="#10B981" stroke-width="4" class="mimic-line"/>
+                            
+                            <!-- Circuit Breaker DJ-03 -->
+                            <g id="dj-03-group" onclick="toggleBreaker('dj-03')" class="cursor-pointer group">
+                                <rect id="dj-03-bg" x="30" y="60" width="40" height="40" rx="6" fill="#10B981" stroke="#047857" stroke-width="2"/>
+                                <text id="dj-03-text" x="50" y="84" text-anchor="middle" fill="#FFFFFF" font-weight="bold" font-size="10">FERMÉ</text>
+                                <text x="50" y="115" text-anchor="middle" fill="#22223B" font-weight="bold" font-size="11">DJ-03 (Éolien 480MW)</text>
+                            </g>
+
+                            <line x1="50" y1="100" x2="50" y2="160" stroke="#22223B" stroke-width="4"/>
+
+                            <!-- Wind Offshore Icon Container -->
+                            <rect x="15" y="160" width="70" height="60" rx="8" fill="#F0EFF5" stroke="#10B981" stroke-width="2"/>
+                            <text x="50" y="185" text-anchor="middle" fill="#047857" font-weight="bold">PARC OFFSHORE</text>
+                            <text x="50" y="202" text-anchor="middle" fill="#7A7289" font-size="10">Anémo: 14.2m/s</text>
+                        </g>
+                    </svg>
+
+                </div>
+
+                <!-- Breaker Control Help Box -->
+                <div class="mt-4 p-3 bg-edf-violetLight rounded-xl border border-edf-border flex flex-wrap items-center justify-between text-xs text-edf-violetSoft">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="info" class="w-4 h-4 text-edf-accent"></i>
+                        <span>Cliquez sur un disjoncteur (ex: <strong>DJ-01</strong>, <strong>DJ-02</strong>) pour simuler une ouverture/fermeture sécurisée à distance.</span>
+                    </div>
+                    <div class="flex items-center gap-3 font-mono text-[11px]">
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Fermé (Sous Tension)</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-rose-500 inline-block"></span> Ouvert (Isolé)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Node Telemetry Cards (Real EDF Metrics) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                <!-- Card 1: EPR Reactor Unit -->
+                <div class="scada-panel p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-edf-violet">Tranche EPR 1650 MW</span>
+                        <span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">Pleine Puissance</span>
+                    </div>
+                    <div class="text-2xl font-black font-mono text-edf-violet" id="epr-mw-val">1 648 MW</div>
+                    <div class="space-y-1 text-xs text-edf-violetSlate font-mono pt-1 border-t border-edf-border">
+                        <div class="flex justify-between"><span>Pression Primaire:</span><strong class="text-edf-violet" id="epr-press-val">155.2 bar</strong></div>
+                        <div class="flex justify-between"><span>Temp. Eau Coeur:</span><strong class="text-edf-violet" id="epr-temp-val">315.4 °C</strong></div>
+                    </div>
+                </div>
+
+                <!-- Card 2: HV Transformer Oil & SF6 Gas -->
+                <div class="scada-panel p-4 space-y-2" id="card-transfo">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-edf-violet">Transformateur TR-01 400kV</span>
+                        <span id="badge-transfo" class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">Normal</span>
+                    </div>
+                    <div class="text-2xl font-black font-mono text-edf-violet" id="tr-temp-val">52.4 °C</div>
+                    <div class="space-y-1 text-xs text-edf-violetSlate font-mono pt-1 border-t border-edf-border">
+                        <div class="flex justify-between"><span>Pression Huile:</span><strong class="text-edf-violet" id="tr-oil-val">4.2 bar</strong></div>
+                        <div class="flex justify-between"><span>Pression Gaz SF6:</span><strong class="text-edf-violet" id="tr-sf6-val">5.8 bar</strong></div>
+                    </div>
+                </div>
+
+                <!-- Card 3: High Voltage Overhead Line -->
+                <div class="scada-panel p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-edf-violet">Ligne HTB Pylône P-402</span>
+                        <span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">LoRaWAN Active</span>
+                    </div>
+                    <div class="text-2xl font-black font-mono text-edf-violet" id="pylone-temp-val">42.1 °C</div>
+                    <div class="space-y-1 text-xs text-edf-violetSlate font-mono pt-1 border-t border-edf-border">
+                        <div class="flex justify-between"><span>Inclinaison Pylône:</span><strong class="text-edf-violet">0.10 °</strong></div>
+                        <div class="flex justify-between"><span>Flèche Câble Câblé:</span><strong class="text-edf-violet">8.40 m</strong></div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Offshore Wind Turbine Telemetry -->
+                <div class="scada-panel p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-edf-violet">Parc Éolien Offshore Fécamp</span>
+                        <span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">Production Max</span>
+                    </div>
+                    <div class="text-2xl font-black font-mono text-edf-violet" id="wind-mw-val">478 MW</div>
+                    <div class="space-y-1 text-xs text-edf-violetSlate font-mono pt-1 border-t border-edf-border">
+                        <div class="flex justify-between"><span>Anémomètre Mât:</span><strong class="text-edf-violet">14.2 m/s</strong></div>
+                        <div class="flex justify-between"><span>Temp. Multiplicateur:</span><strong class="text-edf-violet">68.2 °C</strong></div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- VIEW B: TELEMETRY DASHBOARD (CHARTS & GAUGES) -->
+        <div id="view-telemetry" class="hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Main Grid Telemetry Timeline (Chart.js) -->
+                <div class="lg:col-span-2 scada-panel p-5 space-y-4">
+                    <div class="flex flex-wrap items-center justify-between border-b border-edf-border pb-3">
+                        <div>
+                            <h3 class="font-extrabold text-edf-violet text-sm flex items-center gap-2">
+                                <i data-lucide="activity" class="w-4 h-4 text-edf-accent"></i>
+                                Télémesure en Temps Réel - Tension (kV) & Puissance Active (MW)
+                            </h3>
+                            <p class="text-xs text-edf-violetSlate">Capteurs SCADA E/S haute fréquence (Échantillonnage 1s)</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-mono">
+                            <span class="flex items-center gap-1 text-edf-accent"><span class="w-2.5 h-2.5 rounded-full bg-edf-accent"></span> Tension 400kV</span>
+                            <span class="flex items-center gap-1 text-edf-orange"><span class="w-2.5 h-2.5 rounded-full bg-edf-orange"></span> Puissance (MW)</span>
+                        </div>
+                    </div>
+                    <div class="h-80 w-full relative">
+                        <canvas id="chart-scada-main"></canvas>
+                    </div>
+                </div>
+
+                <!-- Secondary Chart: SF6 Gas & Temperature -->
+                <div class="scada-panel p-5 space-y-4">
+                    <div class="border-b border-edf-border pb-3">
+                        <h3 class="font-extrabold text-edf-violet text-sm flex items-center gap-2">
+                            <i data-lucide="gauge" class="w-4 h-4 text-amber-500"></i>
+                            Stabilité Pression Gaz Isolation SF6 (bar)
+                        </h3>
+                        <p class="text-xs text-edf-violetSlate">Seuil d'alerte fuite: &lt; 5.2 bar</p>
+                    </div>
+                    <div class="h-60 w-full relative">
+                        <canvas id="chart-sf6-gauge"></canvas>
+                    </div>
+                    <div class="p-3 bg-edf-violetLight rounded-xl text-xs space-y-1 font-mono">
+                        <div class="flex justify-between"><span>Disjoncteur DJ-01:</span><strong class="text-emerald-600">5.82 bar (Nominal)</strong></div>
+                        <div class="flex justify-between"><span>Disjoncteur DJ-02:</span><strong class="text-emerald-600">5.79 bar (Nominal)</strong></div>
+                        <div class="flex justify-between"><span>Poste Source Saclay:</span><strong class="text-emerald-600">5.85 bar (Nominal)</strong></div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- VIEW C: IIoT SENSOR FLEET TABLE -->
+        <div id="view-iot" class="hidden space-y-6">
+            
+            <div class="scada-panel p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-edf-border pb-3">
+                    <div>
+                        <h3 class="font-extrabold text-edf-violet text-base flex items-center gap-2">
+                            <i data-lucide="radio" class="w-5 h-5 text-edf-accent"></i>
+                            Parc de Capteurs IIoT Réseau EDF (LoRaWAN / 5G Privée)
+                        </h3>
+                        <p class="text-xs text-edf-violetSlate">Supervision de l'état de santé des capteurs physiques répartis sur le réseau</p>
+                    </div>
+
+                    <!-- Search & Filter Bar -->
+                    <div class="flex items-center gap-3">
+                        <div class="bg-edf-violetLight rounded-xl border border-edf-border px-3 py-1.5 flex items-center gap-2 text-xs">
+                            <i data-lucide="search" class="w-4 h-4 text-edf-violetSlate"></i>
+                            <input type="text" id="iot-search-input" onkeyup="filterIotTable()" placeholder="Rechercher capteur, ID ou site..." class="bg-transparent focus:outline-none text-edf-violet font-medium w-48">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IIoT Sensors Data Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-edf-violetLight text-edf-violetSoft border-b border-edf-border font-sans uppercase text-[11px] font-extrabold">
+                            <tr>
+                                <th class="p-3">ID Capteur</th>
+                                <th class="p-3">Type & Mesure</th>
+                                <th class="p-3">Site / Localisation</th>
+                                <th class="p-3">Réseau / Signal</th>
+                                <th class="p-3">Batterie</th>
+                                <th class="p-3">Dernier Ping</th>
+                                <th class="p-3 text-right">Valeur Actuelle</th>
+                                <th class="p-3 text-center">Statut</th>
+                            </tr>
+                        </thead>
+                        <tbody id="iot-table-body" class="divide-y divide-edf-border text-edf-violet font-mono">
+                            <!-- Dynamic IIoT Sensor Rows populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- VIEW D: ALARM LOG & JOURNAL DE CONDUITE -->
+        <div id="view-alarms" class="hidden space-y-6">
+            
+            <div class="scada-panel p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-edf-border pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                            <i data-lucide="bell" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-extrabold text-edf-violet text-base">Journal des Alarmes & Evénements SCADA</h3>
+                            <p class="text-xs text-edf-violetSlate">Séquence d'événements horodatée SOE (Sequence of Events)</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button onclick="clearAcknowledgedAlarms()" class="bg-edf-violetLight hover:bg-edf-border text-edf-violet font-bold text-xs px-3.5 py-2 rounded-xl transition-all">
+                            Effacer Alarmes Acquittées
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alarm Stream List -->
+                <div id="alarms-stream-container" class="space-y-3">
+                    <!-- Dynamic Alarms populated by JS -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- CONFIRMATION MODAL FOR CIRCUIT BREAKER TOGGLE -->
+    <div id="modal-breaker" class="fixed inset-0 bg-edf-violet/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-edf-border p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div class="flex items-center gap-3 text-rose-600">
+                <div class="p-2.5 bg-rose-100 rounded-xl">
+                    <i data-lucide="shield-alert" class="w-6 h-6"></i>
+                </div>
+                <h3 class="font-extrabold text-edf-violet text-base">Ordre Télécommandé SCADA</h3>
+            </div>
+            
+            <p class="text-xs text-edf-violetSoft leading-relaxed" id="modal-breaker-text">
+                Confirmez-vous l'envoi de l'ordre d'ouverture/fermeture sur le disjoncteur HTB haute sécurité ?
+            </p>
+
+            <div class="p-3 bg-edf-violetLight rounded-xl text-xs font-mono space-y-1">
+                <div>Matricule Opérateur: <strong class="text-edf-violet">EDF-OPS-7842</strong></div>
+                <div>Poste Source: <strong class="text-edf-violet" id="modal-site-name">Gravelines HTB</strong></div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeBreakerModal()" class="px-4 py-2 bg-edf-violetLight hover:bg-edf-border text-edf-violet font-bold text-xs rounded-xl">
+                    Annuler
+                </button>
+                <button onclick="confirmBreakerToggle()" id="modal-confirm-btn" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md">
+                    Confirmer l'Ordre
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- 4. JAVASCRIPT SCADA SIMULATION & INTERACTIVITY -->
+    <script>
+        // SCADA Application State
+        let currentSite = 'gravelines';
+        let currentView = 'synoptique';
+        let pendingBreakerId = null;
+
+        // Circuit Breaker States (True = Closed/Connected, False = Open/Isolated)
+        let breakers = {
+            'dj-01': true,
+            'dj-02': true,
+            'dj-03': true
+        };
+
+        // IIoT Sensor Dataset (Real EDF Telemetry Examples)
+        let iotSensors = [
+            { id: 'IIOT-VIB-104', type: 'Vibration Turbine', site: 'Gravelines - Tranche 1', network: 'LoRaWAN (Gateway 02)', battery: '94%', ping: 'il y a 3s', value: '1.24 mm/s', status: 'OK' },
+            { id: 'IIOT-THM-802', type: 'Caméra Thermique', site: 'Saclay - Transfo TR-01', network: '5G Privée EDF', battery: 'Secteur', ping: 'il y a 1s', value: '52.4 °C', status: 'OK' },
+            { id: 'IIOT-SF6-042', type: 'Détecteur Fuite SF6', site: 'Gravelines - Disjoncteur DJ-01', network: 'LoRaWAN (Gateway 01)', battery: '88%', ping: 'il y a 12s', value: '0.00 ppm', status: 'OK' },
+            { id: 'IIOT-INC-402', type: 'Inclinomètre Pylône', site: 'Ligne HTB 400kV P-402', network: 'LoRaWAN (Pylône P-400)', battery: '91%', ping: 'il y a 5s', value: '0.10 °', status: 'OK' },
+            { id: 'IIOT-ANE-012', type: 'Anémomètre Mât', site: 'Parc Offshore Fécamp', network: '5G Privée EDF', battery: '100%', ping: 'il y a 2s', value: '14.2 m/s', status: 'OK' }
+        ];
+
+        // Active Alarm Stream
+        let alarmsList = [
+            { id: 'ALM-8041', time: '15:28:14', severity: 'WARNING', title: 'Niveau d\'huile Transfo TR-01', site: 'Saclay HTB', desc: 'Variation minime détectée sur le réservoir d\'expansion.', ack: false }
+        ];
+
+        // Chart Instance
+        let mainScadaChart, sf6GaugeChart;
+
+        // Clock Update
+        function updateScadaClock() {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0] + ' CET';
+            document.getElementById('scada-clock').textContent = timeStr;
+        }
+
+        // View Navigation Switcher
+        function switchView(viewId) {
+            currentView = viewId;
+            ['synoptique', 'telemetry', 'iot', 'alarms'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                const btn = document.getElementById(`btn-${v}`);
+                if (v === viewId) {
+                    el.classList.remove('hidden');
+                    btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-edf-violet text-white flex items-center gap-2 shadow-sm";
+                } else {
+                    el.classList.add('hidden');
+                    btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-edf-violetSoft hover:text-edf-violet hover:bg-edf-violetLight flex items-center gap-2";
+                }
+            });
+
+            if (viewId === 'telemetry') {
+                setTimeout(initScadaCharts, 50);
+            }
+        }
+
+        // Breaker Control Modal Handler
+        function toggleBreaker(breakerId) {
+            pendingBreakerId = breakerId;
+            const currentState = breakers[breakerId];
+            const actionText = currentState ? "l'OUVERTURE (Isolation du réseau)" : "la FERMETURE (Mise sous tension)";
+            
+            document.getElementById('modal-breaker-text').innerHTML = `Confirmez-vous <strong>${actionText}</strong> télécommandée du disjoncteur <strong>${breakerId.toUpperCase()}</strong> ?`;
+            document.getElementById('modal-breaker').classList.remove('hidden');
+        }
+
+        function closeBreakerModal() {
+            document.getElementById('modal-breaker').classList.add('hidden');
+            pendingBreakerId = null;
+        }
+
+        function confirmBreakerToggle() {
+            if (!pendingBreakerId) return;
+
+            breakers[pendingBreakerId] = !breakers[pendingBreakerId];
+            const isClosed = breakers[pendingBreakerId];
+
+            const bgEl = document.getElementById(`${pendingBreakerId}-bg`);
+            const textEl = document.getElementById(`${pendingBreakerId}-text`);
+
+            if (isClosed) {
+                bgEl.setAttribute('fill', '#10B981');
+                bgEl.setAttribute('stroke', '#047857');
+                textEl.textContent = 'FERMÉ';
+                showToast('Ordre Télécommandé Réussi', `Disjoncteur ${pendingBreakerId.toUpperCase()} FERMÉ (Circuit Sous Tension)`, 'success');
+            } else {
+                bgEl.setAttribute('fill', '#EF4444');
+                bgEl.setAttribute('stroke', '#B91C1C');
+                textEl.textContent = 'OUVERT';
+                showToast('Ordre Télécommandé Réussi', `Disjoncteur ${pendingBreakerId.toUpperCase()} OUVERT (Circuit Isolé)`, 'warning');
+            }
+
+            closeBreakerModal();
+        }
+
+        // Perturbation & Simulation Controls
+        function injectPerturbation(type) {
+            if (type === 'overload') {
+                document.getElementById('site-current-val').textContent = '1 820 A';
+                document.getElementById('epr-mw-val').textContent = '1 780 MW';
+                showToast('Pointe de Charge Injectée', 'Courant de ligne augmenté à 1820 A (+30%)', 'warning');
+            } else if (type === 'heat') {
+                document.getElementById('tr-temp-val').textContent = '88.6 °C';
+                
+                const card = document.getElementById('card-transfo');
+                const badge = document.getElementById('badge-transfo');
+                
+                card.classList.add('border-rose-500', 'bg-rose-50/50');
+                badge.className = "bg-rose-500 text-white font-bold px-2 py-0.5 rounded text-[10px] animate-pulse";
+                badge.textContent = "CRITIQUE SURCHAUFFE";
+
+                // Add Alarm
+                alarmsList.unshift({
+                    id: `ALM-${Math.floor(1000 + Math.random() * 9000)}`,
+                    time: new Date().toTimeString().split(' ')[0],
+                    severity: 'CRITICAL',
+                    title: 'Surchauffe Transformateur TR-01',
+                    site: 'Saclay / Gravelines',
+                    desc: 'Température huile supérieure au seuil max (> 85°C). Ventilation forcée recommandée.',
+                    ack: false
+                });
+
+                renderAlarms();
+                showToast('Alerte Critique Injectée', 'Surchauffe Transfo TR-01 (88.6 °C)', 'danger');
+            }
+        }
+
+        function resetSimulation() {
+            document.getElementById('site-current-val').textContent = '1 240 A';
+            document.getElementById('epr-mw-val').textContent = '1 648 MW';
+            document.getElementById('tr-temp-val').textContent = '52.4 °C';
+
+            const card = document.getElementById('card-transfo');
+            const badge = document.getElementById('badge-transfo');
+            
+            card.className = "scada-panel p-4 space-y-2";
+            badge.className = "bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]";
+            badge.textContent = "Normal";
+
+            showToast('Simulateur Réinitialisé', 'Retour aux paramètres nominaux EDF', 'info');
+        }
+
+        // IIoT Table Generator
+        function renderIotTable() {
+            const tbody = document.getElementById('iot-table-body');
+            tbody.innerHTML = '';
+
+            iotSensors.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-edf-violetLight/60 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-edf-accent">${s.id}</td>
+                    <td class="p-3 font-bold">${s.type}</td>
+                    <td class="p-3 text-edf-violetSoft">${s.site}</td>
+                    <td class="p-3">${s.network}</td>
+                    <td class="p-3"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">${s.battery}</span></td>
+                    <td class="p-3 text-edf-violetSlate">${s.ping}</td>
+                    <td class="p-3 text-right font-bold text-edf-violet">${s.value}</td>
+                    <td class="p-3 text-center"><span class="bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 font-bold px-2 py-0.5 rounded text-[10px]">EN LIGNE</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterIotTable() {
+            const q = document.getElementById('iot-search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('#iot-table-body tr');
+
+            rows.forEach(r => {
+                const text = r.textContent.toLowerCase();
+                r.style.display = text.includes(q) ? '' : 'none';
+            });
+        }
+
+        // Alarm Manager
+        function renderAlarms() {
+            const container = document.getElementById('alarms-stream-container');
+            container.innerHTML = '';
+
+            let unackCount = 0;
+
+            alarmsList.forEach((a, idx) => {
+                if (!a.ack) unackCount++;
+
+                const card = document.createElement('div');
+                let borderClass = a.severity === 'CRITICAL' ? 'border-l-4 border-l-rose-500 bg-rose-50/30' : 'border-l-4 border-l-amber-500 bg-amber-50/30';
+                let badgeClass = a.severity === 'CRITICAL' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white';
+
+                card.className = `scada-panel p-4 flex flex-wrap items-center justify-between gap-4 ${borderClass}`;
+                card.innerHTML = `
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2 text-xs font-mono">
+                            <span class="${badgeClass} font-bold px-2 py-0.5 rounded text-[10px]">${a.severity}</span>
+                            <span class="font-bold text-edf-violet">${a.id}</span>
+                            <span class="text-edf-violetSlate">• ${a.time}</span>
+                            <span class="text-edf-violetMid font-bold">(${a.site})</span>
+                        </div>
+                        <h4 class="font-extrabold text-edf-violet text-sm">${a.title}</h4>
+                        <p class="text-xs text-edf-violetSoft">${a.desc}</p>
+                    </div>
+
+                    <div>
+                        ${a.ack ? 
+                            `<span class="bg-emerald-100 text-emerald-800 font-bold text-xs px-3 py-1.5 rounded-xl border border-emerald-300 flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i> Acquittée</span>` :
+                            `<button onclick="acknowledgeAlarm(${idx})" class="bg-edf-violet hover:bg-edf-violetMid text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-sm">Acquitter</button>`
+                        }
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            document.getElementById('alarm-tab-badge').textContent = unackCount;
+            lucide.createIcons();
+        }
+
+        function acknowledgeAlarm(index) {
+            alarmsList[index].ack = true;
+            renderAlarms();
+            showToast('Alarme Acquittée', 'Événement consigné dans le registre de conduite EDF', 'info');
+        }
+
+        function clearAcknowledgedAlarms() {
+            alarmsList = alarmsList.filter(a => !a.ack);
+            renderAlarms();
+        }
+
+        // Initialize Telemetry Charts (Chart.js)
+        function initScadaCharts() {
+            if (mainScadaChart) return;
+
+            Chart.defaults.color = '#7A7289';
+            Chart.defaults.font.family = 'JetBrains Mono';
+
+            // Main Telemetry
+            const ctx1 = document.getElementById('chart-scada-main').getContext('2d');
+            mainScadaChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['15:20', '15:22', '15:24', '15:26', '15:28', '15:30'],
+                    datasets: [
+                        {
+                            label: 'Tension Barre HTB (kV)',
+                            data: [400.1, 400.3, 400.2, 400.4, 400.1, 400.2],
+                            borderColor: '#6C5CE7',
+                            backgroundColor: 'rgba(108, 92, 231, 0.08)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Puissance Active EPR (MW)',
+                            data: [1645, 1648, 1650, 1647, 1649, 1648],
+                            borderColor: '#FF5F00',
+                            borderWidth: 2,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#E2E4EB' } },
+                        y: { grid: { color: '#E2E4EB' } }
+                    }
+                }
+            });
+
+            // SF6 Gauge
+            const ctx2 = document.getElementById('chart-sf6-gauge').getContext('2d');
+            sf6GaugeChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: ['15:00', '15:10', '15:20', '15:30'],
+                    datasets: [{
+                        label: 'Pression SF6 (bar)',
+                        data: [5.82, 5.81, 5.82, 5.80],
+                        borderColor: '#10B981',
+                        borderWidth: 2,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#E2E4EB' } },
+                        y: { min: 5.0, max: 6.5, grid: { color: '#E2E4EB' } }
+                    }
+                }
+            });
+        }
+
+        // Toast Engine
+        function showToast(title, msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            let colorBorder = 'border-edf-accent';
+            if (type === 'danger') colorBorder = 'border-rose-500';
+            if (type === 'warning') colorBorder = 'border-amber-500';
+            if (type === 'success') colorBorder = 'border-emerald-500';
+
+            toast.className = `pointer-events-auto bg-white border-l-4 ${colorBorder} border border-edf-border text-edf-violet p-3.5 rounded-xl shadow-2xl space-y-1 max-w-sm font-sans text-xs flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2`;
+            toast.innerHTML = `
+                <div class="p-1.5 rounded-lg bg-edf-violetLight text-edf-violet shrink-0">
+                    <i data-lucide="info" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="font-black text-edf-violet">${title}</div>
+                    <div class="text-edf-violetSoft">${msg}</div>
+                </div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.remove();
+            }, 4000);
+        }
+
+        // Window Onload Initialization
+        window.onload = function() {
+            lucide.createIcons();
+            setInterval(updateScadaClock, 1000);
+            updateScadaClock();
+            renderIotTable();
+            renderAlarms();
+        };
+    </script>
+</body>
+</html>
